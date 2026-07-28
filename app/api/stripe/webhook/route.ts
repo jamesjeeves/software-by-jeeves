@@ -31,7 +31,7 @@ export async function POST(request: Request) {
   ) {
     const subscription = event.data.object as Stripe.Subscription;
     const customerId = String(subscription.customer);
-    const periodEnd = subscription.items.data[0]?.current_period_end;
+    const periodEnd = subscription.current_period_end;
 
     await admin
       .from("profiles")
