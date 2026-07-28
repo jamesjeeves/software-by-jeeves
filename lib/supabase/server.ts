@@ -26,11 +26,7 @@ export async function createClient() {
               cookieStore.set(name, value, options);
             });
           } catch {
-            /*
-             * Setting cookies can fail while rendering a Server Component.
-             * That is acceptable because authentication middleware/routes
-             * will handle session cookie updates where writing is allowed.
-             */
+            // Ignore if cookies can't be set during Server Component rendering.
           }
         },
       },

@@ -1,25 +1,45 @@
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
-import { stripe } from "@/lib/stripe";
+import { getStripe } from "@/lib/stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function POST(request: Request) {
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+  if (!webhookSecret) {
+    return NextResponse.json(
+      { error: "Stripe webhook is not configured." },
+      { status: 503 }
+    );
+  }
+
   const body = await request.text();
   const headerStore = await headers();
   const signature = headerStore.get("stripe-signature");
 
-  if (!signature) return NextResponse.json({ error: "Missing signature" }, { status: 400 });
+  if (!signature) {
+    return NextResponse.json(
+      { error: "Missing Stripe signature." },
+      { status: 400 }
+    );
+  }
+
+  const stripe = getStripe();
 
   let event: Stripe.Event;
+
   try {
     event = stripe.webhooks.constructEvent(
       body,
       signature,
-      process.env.STRIPE_WEBHOOK_SECRET!
+      webhookSecret
     );
   } catch {
-    return NextResponse.json({ error: "Invalid webhook signature" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Invalid webhook signature." },
+      { status: 400 }
+    );
   }
 
   const admin = createAdminClient();
