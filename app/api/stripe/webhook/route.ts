@@ -4,6 +4,8 @@ import Stripe from "stripe";
 import { getStripe } from "@/lib/stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+export const runtime = "nodejs";
+
 export async function POST(request: Request) {
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
@@ -35,9 +37,14 @@ export async function POST(request: Request) {
       signature,
       webhookSecret
     );
-  } catch {
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Invalid webhook signature.";
+
     return NextResponse.json(
-      { error: "Invalid webhook signature." },
+      { error: message },
       { status: 400 }
     );
   }
@@ -49,20 +56,40 @@ export async function POST(request: Request) {
     event.type === "customer.subscription.updated" ||
     event.type === "customer.subscription.deleted"
   ) {
-    const subscription = event.data.object as Stripe.Subscription;
-    const customerId = String(subscription.customer);
-    const periodEnd = subscription.current_period_end;
+    const subscription =
+      event.data.object as Stripe.Subscription;
 
-    await admin
+    const customerId =
+      typeof subscription.customer === "string"
+        ? subscription.customer
+        : subscription.customer.id;
+
+    const periodEnd =
+      subscription.items.data[0]?.current_period_end ?? null;
+
+    const { error } = await admin
       .from("profiles")
       .update({
         subscription_id: subscription.id,
         subscription_status: subscription.status,
-        current_period_end: periodEnd
-          ? new Date(periodEnd * 1000).toISOString()
-          : null,
+        current_period_end:
+          periodEnd !== null
+            ? new Date(periodEnd * 1000).toISOString()
+            : null,
       })
       .eq("stripe_customer_id", customerId);
+
+    if (error) {
+      console.error(
+        "Failed to update subscription profile:",
+        error
+      );
+
+      return NextResponse.json(
+        { error: "Failed to update subscription profile." },
+        { status: 500 }
+      );
+    }
   }
 
   return NextResponse.json({ received: true });
